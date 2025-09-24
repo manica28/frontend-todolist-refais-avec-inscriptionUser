@@ -1,16 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { 
-  getTaches, 
-  createTaches, 
-  updateTaches,
-  deleteTaches,
-  updateStatus,
-  delegateTaches,
-  getAllUsers, 
-  getCurrentUserId 
-} from "../api/Taches";
+import { getTaches, createTaches, updateTaches, deleteTaches,updateStatus,delegateTaches,getAllUsers, getCurrentUserId,getCurrentUser, getUserInfo } from "../api/Taches";
 import TachesCard from "./TacheCard";
 import TacheModal from "./TacheModal";
+import { ChevronLeft, ChevronRight, User } from "lucide-react";
+import { usePagination } from "../hooks/usePagination";
 
 const TachesPage = ({ user, onLogout }) => {
   const [taches, setTaches] = useState([]);
@@ -18,12 +11,14 @@ const TachesPage = ({ user, onLogout }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserInfo, setCurrentUserInfo] = useState(null);
+
+  const tasksPerPage = 6;
 
   const fetchTaches = async () => {
     try {
       const data = await getTaches();
       setTaches(data);
-      console.log('Tâches récupérées:', data);
     } catch (err) {
       console.error('Erreur récupération tâches:', err);
     }
@@ -33,7 +28,6 @@ const TachesPage = ({ user, onLogout }) => {
     try {
       const data = await getAllUsers();
       setUsers(data);
-      console.log('Utilisateurs récupérés:', data);
     } catch (err) {
       console.error('Erreur récupération utilisateurs:', err);
     }
@@ -41,100 +35,107 @@ const TachesPage = ({ user, onLogout }) => {
 
   useEffect(() => {
     const userId = getCurrentUserId();
+    const userInfoFromToken = getCurrentUser();
+
     setCurrentUserId(userId);
-    console.log('Current User ID récupéré:', userId);
+    setCurrentUserInfo(userInfoFromToken);
+
+    if (userId) {
+      getUserInfo(userId).then((fullInfo) => setCurrentUserInfo(fullInfo))
+      .catch((err) => console.error("Erreur récupération infos utilisateur:", err));
+    }
 
     fetchTaches();
     fetchUsers();
   }, []);
 
-  // Fonction pour créer une tâche
+  // Hook pagination
+  const {currentPage,totalPages,indexOfFirstItem,indexOfLastItem,goToPage,nextPage,prevPage
+} = usePagination(taches.length, tasksPerPage);
+
+  const currentTasks = taches.slice(indexOfFirstItem, indexOfLastItem);
+
+  // Pagination boutons
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return pageNumbers;
+  };
+
+  // Actions tâches
   const handleCreateTache = async (taskData) => {
     try {
-      console.log('Création tâche avec données:', taskData);
       const newTask = await createTaches(taskData);
-      console.log('Nouvelle tâche créée:', newTask);
       setTaches([...taches, newTask]);
       setShowModal(false);
+
+      const newTotalPages = Math.ceil((taches.length + 1) / tasksPerPage);
+      if (newTotalPages > totalPages) goToPage(newTotalPages);
     } catch (err) {
-      console.error("Erreur création tâche:", err);
       alert(`Erreur lors de la création: ${err.message}`);
     }
   };
 
-  // Fonction pour modifier une tâche
   const handleEditTache = (task) => {
     setEditingTask(task);
     setShowModal(true);
   };
 
-  // Fonction pour sauvegarder les modifications
   const handleUpdateTache = async (taskData) => {
     try {
-      console.log('Modification tâche ID:', editingTask.id, 'avec données:', taskData);
       const updatedTask = await updateTaches(editingTask.id, taskData);
-      console.log('Tâche modifiée:', updatedTask);
-      
-      // Mettre à jour la liste des tâches
       setTaches(taches.map(t => t.id === editingTask.id ? updatedTask : t));
       setShowModal(false);
       setEditingTask(null);
     } catch (err) {
-      console.error("Erreur modification tâche:", err);
       alert(`Erreur lors de la modification: ${err.message}`);
     }
   };
 
-  // Fonction pour supprimer une tâche
   const handleDeleteTache = async (taskId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
-      try {
-        console.log('Suppression tâche ID:', taskId);
-        await deleteTaches(taskId);
-        console.log('Tâche supprimée avec succès');
-        
-        // Retirer la tâche de la liste
-        setTaches(taches.filter(t => t.id !== taskId));
-      } catch (err) {
-        console.error("Erreur suppression tâche:", err);
-        alert(`Erreur lors de la suppression: ${err.message}`);
-      }
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
+    try {
+      await deleteTaches(taskId);
+      const newTaches = taches.filter(t => t.id !== taskId);
+      setTaches(newTaches);
+
+      const newTotalPages = Math.ceil(newTaches.length / tasksPerPage);
+      if (currentPage > newTotalPages && newTotalPages > 0) goToPage(newTotalPages);
+    } catch (err) {
+      alert(`Erreur lors de la suppression: ${err.message}`);
     }
   };
 
-  // Fonction pour changer le statut d'une tâche
   const handleToggleStatus = async (task) => {
     try {
       const newStatus = task.status === 'TERMINEE' ? 'EN_COURS' : 'TERMINEE';
-      console.log('Changement statut tâche ID:', task.id, 'vers:', newStatus);
-      
       const updatedTask = await updateStatus(task.id, newStatus);
-      console.log('Statut modifié:', updatedTask);
-      
-      // Mettre à jour la liste des tâches
       setTaches(taches.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
     } catch (err) {
-      console.error("Erreur changement statut:", err);
       alert(`Erreur lors du changement de statut: ${err.message}`);
     }
   };
 
-  // Fonction pour déléguer une tâche
   const handleDelegateTache = async (taskId, delegateUserId) => {
     try {
-      console.log('Délégation tâche ID:', taskId, 'à utilisateur:', delegateUserId);
-      const updatedTask = await delegateTaches(taskId, delegateUserId);
-      console.log('Tâche déléguée:', updatedTask);
-      
-      // Rafraîchir la liste des tâches
+      await delegateTaches(taskId, delegateUserId);
       await fetchTaches();
     } catch (err) {
-      console.error("Erreur délégation tâche:", err);
       alert(`Erreur lors de la délégation: ${err.message}`);
     }
   };
 
-  // Fonction pour fermer le modal
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTask(null);
@@ -142,26 +143,67 @@ const TachesPage = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen p-6 bg-gray-100">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Mes tâches</h1>
-        <button onClick={onLogout} className="text-red-600 underline">
-          Déconnexion
-        </button>
+      {/* Header */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+              {currentUserInfo?.prenom?.[0] || currentUserInfo?.nom?.[0] || <User className="w-6 h-6" />}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">
+                Bienvenue {currentUserInfo?.prenom || currentUserInfo?.login || 'Utilisateur'} !
+              </h1>
+              <p className="text-gray-600">
+                {currentUserInfo?.nom && currentUserInfo?.prenom 
+                  ? `${currentUserInfo.prenom} ${currentUserInfo.nom}` 
+                  : currentUserInfo?.login || `ID : ${currentUserId}`}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onLogout} 
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors" >
+            Déconnexion
+          </button>
+        </div>
+      </div>
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl p-4 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-700">Total des tâches</h3>
+          <p className="text-3xl font-bold text-blue-600">{taches.length}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-700">En cours</h3>
+          <p className="text-3xl font-bold text-orange-600">
+            {taches.filter(t => t.status !== 'TERMINEE').length}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-700">Terminées</h3>
+          <p className="text-3xl font-bold text-green-600">
+            {taches.filter(t => t.status === 'TERMINEE').length}
+          </p>
+        </div>
       </div>
 
       <button
         onClick={() => setShowModal(true)}
-        className="mb-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl"
+        className="mb-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
       >
-        Ajouter une tâche
+        + Ajouter une tâche
       </button>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {taches.map((tache) => (
+      {/* Grille */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {currentTasks.map((tache) => (
           <TachesCard
             key={tache.id}
             task={tache}
             currentUserId={currentUserId}
+            users={users}
             onEdit={() => handleEditTache(tache)}
             onDelete={() => handleDeleteTache(tache.id)}
             onToggleStatus={() => handleToggleStatus(tache)}
@@ -171,14 +213,48 @@ const TachesPage = ({ user, onLogout }) => {
       </div>
 
       {taches.length === 0 && (
-        <div className="text-center text-gray-500 mt-8">
-          Aucune tâche trouvée. Créez votre première tâche !
+        <div className="text-center text-gray-500 mt-12">
+          <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-12 h-12 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Aucune tâche trouvée</h3>
+          <p>Créez votre première tâche pour commencer !</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2 mt-8">
+          <button onClick={prevPage} disabled={currentPage === 1} className={`p-2 rounded-lg ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'}`}>
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {getPageNumbers().map(number => (
+            <button
+              key={number}
+              onClick={() => goToPage(number)}
+              className={`px-4 py-2 rounded-lg font-medium ${currentPage === number ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'}`}
+            >
+              {number}
+            </button>
+          ))}
+
+          <button onClick={nextPage} disabled={currentPage === totalPages} className={`p-2 rounded-lg ${currentPage === totalPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'}`}>
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="text-center text-gray-500 mt-4">
+          Page {currentPage} sur {totalPages} • 
+          Affichage de {indexOfFirstItem + 1} à {Math.min(indexOfLastItem, taches.length)} sur {taches.length} tâches
         </div>
       )}
 
       {showModal && (
         <TacheModal
-          task={editingTask} // Passer la tâche à modifier ou null pour création
+          task={editingTask}
           onClose={handleCloseModal}
           onSubmit={editingTask ? handleUpdateTache : handleCreateTache}
           users={users}

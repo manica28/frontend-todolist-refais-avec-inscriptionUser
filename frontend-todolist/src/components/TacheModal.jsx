@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Users } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, UserPlus, Users, Mic, StopCircle } from 'lucide-react';
+import {modalContainer, modalContent, inputClass, textareaClass, selectClass, buttonPrimary, buttonSecondary, labelClass, delegateInfo, imagePreview} from '../styles/tailwindModal';
 
 const TacheModal = ({ task, onClose, onSubmit, users = [] }) => {
   const [formData, setFormData] = useState({
@@ -10,6 +11,12 @@ const TacheModal = ({ task, onClose, onSubmit, users = [] }) => {
     imageUrl: ''
   });
 
+  // --- Vocaux ---
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioFiles, setAudioFiles] = useState([]); // {url, blob}
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
   useEffect(() => {
     if (task) {
       setFormData({
@@ -19,160 +26,163 @@ const TacheModal = ({ task, onClose, onSubmit, users = [] }) => {
         delegue_id: task.delegue_id || null,
         imageUrl: task.imageUrl || ''
       });
+      setAudioFiles(task.vocaux || []);
     }
   }, [task]);
 
-  const handleDelegateChange = (e) => {
-    const value = e.target.value;
-    setFormData({
-      ...formData, 
-      delegue_id: value === '' || value === 'null' ? null : Number(value)
-    });
+  // --- Enregistrement vocal ---
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setAudioFiles(prev => [...prev, { url, blob }]);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Erreur micro:', err);
+    }
   };
 
+  const stopRecording = () => {
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
+  };
+
+  // --- Suppression vocal ---
+  const removeAudio = (index) => {
+    setAudioFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // --- Submit ---
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    console.log('DEBUG TacheModal - formData original:', formData);
 
     if (!formData.nom.trim() || formData.description.trim().length < 4) {
       alert('Le nom et la description doivent être remplis correctement (description ≥ 4 caractères)');
       return;
     }
 
-    // Ne pas envoyer delegue_id si pas de délégation
     const submitData = {
       nom: formData.nom.trim(),
       description: formData.description.trim(),
-      imageUrl: formData.imageUrl?.trim() || ''
+      imageUrl: formData.imageUrl?.trim() || '',
+      vocaux: audioFiles.map(a => a.blob) // envoyer les blobs
     };
 
-    // N'ajouter delegue_id que s'il y a vraiment une délégation
-    if (formData.delegue_id && formData.delegue_id !== '' && formData.delegue_id !== 'null' && formData.delegue_id !== null) {
-      submitData.delegue_id = Number(formData.delegue_id);
-    }
+    if (formData.delegue_id) submitData.delegue_id = Number(formData.delegue_id);
 
-    console.log('DEBUG TacheModal - submitData final:', submitData);
-    console.log('DEBUG TacheModal - submitData JSON:', JSON.stringify(submitData));
-    
-    onSubmit(submitData);  // onSubmit est passé en props
+    onSubmit(submitData);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className={modalContainer}>
+      <div className={modalContent}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">
-            {task ? 'Modifier la tâche' : 'Nouvelle tâche'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100"
-          >
+          <h2 className="text-2xl font-bold text-gray-800">{task ? 'Modifier la tâche' : 'Nouvelle tâche'}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Nom */}
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Nom de la tâche *</label>
+            <label className={labelClass}>Nom de la tâche *</label>
             <input
               type="text"
               value={formData.nom}
-              onChange={(e) => setFormData({...formData, nom: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+              className={inputClass}
               placeholder="Nom de la tâche"
               required
             />
           </div>
 
+          {/* Description */}
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Description *</label>
+            <label className={labelClass}>Description *</label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className={textareaClass}
               rows={3}
               placeholder="Description détaillée"
               required
             />
           </div>
 
+          {/* Délégation */}
           <div>
-            <label className="block text-gray-700 font-medium mb-2">
+            <label className={labelClass}>
               <div className="flex items-center space-x-2">
                 <UserPlus className="w-4 h-4" />
                 <span>Déléguer à (optionnel)</span>
               </div>
             </label>
-            
             <select
               value={formData.delegue_id || ''}
-              onChange={handleDelegateChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              onChange={(e) => setFormData({ ...formData, delegue_id: e.target.value === '' ? null : Number(e.target.value) })}
+              className={selectClass}
             >
-              <option value="">Pas de délégation (je garde la tâche)</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.prenom} {user.nom} ({user.login})
-                </option>
-              ))}
+              <option value="">Pas de délégation</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>)}
             </select>
-
-            {formData.delegue_id && (
-              <div className="mt-2 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
-                <div className="flex items-center text-blue-700">
-                  <Users className="w-4 h-4 mr-2" />
-                  <span className="text-sm font-medium">Cette tâche sera déléguée</span>
-                </div>
-                <p className="text-blue-600 text-xs mt-1">
-                  La personne déléguée pourra modifier, supprimer et changer le statut de cette tâche.
-                </p>
-              </div>
-            )}
           </div>
 
+          {/* Image */}
           <div>
-            <label className="block text-gray-700 font-medium mb-2">URL de l'image (optionnel)</label>
+            <label className={labelClass}>URL de l'image (optionnel)</label>
             <input
               type="url"
               value={formData.imageUrl}
-              onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+              className={inputClass}
               placeholder="https://example.com/image.jpg"
             />
-            {formData.imageUrl && (
-              <div className="mt-2">
-                <img
-                  src={formData.imageUrl}
-                  alt="Aperçu"
-                  className="w-full h-32 object-cover rounded-lg"
-                  onError={(e) => (e.target.style.display = 'none')}
-                />
-              </div>
-            )}
+            {formData.imageUrl && <img src={formData.imageUrl} alt="Aperçu" className={imagePreview} onError={(e) => (e.target.style.display='none')} />}
           </div>
 
-          {/* Debug temporaire */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs">
-            <strong>Debug Modal:</strong><br/>
-            delegue_id: {String(formData.delegue_id)} (type: {typeof formData.delegue_id})
+          {/* Vocaux */}
+          <div>
+            <label className={labelClass}>Vocaux</label>
+            <div className="flex space-x-2 mb-2">
+              {!isRecording ? (
+                <button type="button" onClick={startRecording} className="flex items-center space-x-1 bg-green-500 text-white px-3 py-1 rounded">
+                  <Mic className="w-4 h-4"/> <span>Enregistrer</span>
+                </button>
+              ) : (
+                <button type="button" onClick={stopRecording} className="flex items-center space-x-1 bg-red-500 text-white px-3 py-1 rounded">
+                  <StopCircle className="w-4 h-4"/> <span>Arrêter</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              {audioFiles.map((a, i) => (
+                <div key={i} className="flex items-center space-x-2">
+                  <audio controls src={a.url}></audio>
+                  <button type="button" className="text-red-500" onClick={() => removeAudio(i)}>Supprimer</button>
+                </div>
+              ))}
+            </div>
           </div>
 
+          {/* Buttons */}
           <div className="flex space-x-4 pt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all"
-            >
-              {task ? 'Modifier' : 'Créer'}
-            </button>
+            <button type="button" onClick={onClose} className={buttonSecondary}>Annuler</button>
+            <button type="submit" className={buttonPrimary}>{task ? 'Modifier' : 'Créer'}</button>
           </div>
         </form>
       </div>
