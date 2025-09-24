@@ -64,6 +64,67 @@ const handleResponse = async (response) => {
     return response.json();
 };
 
+// Fonction d'inscription
+export const register = async (userData) => {
+    try {
+        const response = await fetch(`${APIURL}/users`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(userData)
+        });
+
+        const responseText = await response.text();
+        let responseData;
+        
+        try {
+            responseData = responseText.trim() === '' ? {} : JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error(`Réponse serveur non-JSON (${response.status}): ${responseText.substring(0, 100)}`);
+        }
+
+        if (!response.ok) {
+            let errorMessage = 'Erreur lors de la création du compte';
+            
+            if (responseData.error) {
+                errorMessage = responseData.error;
+            } else if (responseData.message) {
+                errorMessage = responseData.message;
+            } else if (typeof responseData === 'string') {
+                errorMessage = responseData;
+            } else if (responseText && responseText !== '{}') {
+                errorMessage = responseText;
+            }
+
+            switch (response.status) {
+                case 400:
+                    errorMessage = `Données invalides: ${errorMessage}`;
+                    break;
+                case 409:
+                    errorMessage = 'Cet identifiant existe déjà';
+                    break;
+                case 500:
+                    errorMessage = `Erreur serveur interne: ${errorMessage}`;
+                    break;
+                default:
+                    errorMessage = `Erreur HTTP ${response.status}: ${errorMessage}`;
+            }
+
+            throw new Error(errorMessage);
+        }
+
+        return responseData;
+        
+    } catch (error) {
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('Impossible de se connecter au serveur. Vérifiez que le serveur est démarré sur le port 4000.');
+        }
+        throw error;
+    }
+};
+
 // Fonction de connexion
 export const login = async (login, password) => {
     try {
@@ -101,10 +162,6 @@ export const getTaches = async () => {
         throw error;
     }
 };
-
-// Essayez cette version qui imite l'ancien format :
-
-// Remplacez temporairement votre fonction createTaches par cette version debug :
 
 export const createTaches = async (taskData) => {
     console.log('=== DEBUG createTaches START ===');
@@ -292,6 +349,49 @@ export const delegateTaches = async (taskId, delegateId) => {
         return data;
     } catch (error) {
         console.error('Erreur délégation tâche:', error);
+        throw error;
+    }
+};
+
+// Fonction pour récupérer les informations complètes de l'utilisateur connecté
+export const getCurrentUser = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.warn('Pas de token trouvé');
+        return null;
+    }
+    
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('Payload JWT complet:', payload);
+        
+        // Retourner toutes les infos disponibles
+        return {
+            id: payload.id || payload.userId || payload.user_id,
+            nom: payload.nom || payload.lastname,
+            prenom: payload.prenom || payload.firstname,
+            login: payload.login || payload.username,
+            email: payload.email
+        };
+    } catch (error) {
+        console.error('Erreur décodage JWT:', error);
+        return null;
+    }
+};
+
+// Alternative : Récupérer les infos utilisateur depuis l'API
+export const getUserInfo = async (userId) => {
+    try {
+        const response = await fetch(`${APIURL}/users/${userId}`, {
+            method: 'GET',
+            headers: getHeaders()
+        });
+        
+        const data = await handleResponse(response);
+        console.log('Infos utilisateur récupérées:', data);
+        return data;
+    } catch (error) {
+        console.error('Erreur récupération infos utilisateur:', error);
         throw error;
     }
 };

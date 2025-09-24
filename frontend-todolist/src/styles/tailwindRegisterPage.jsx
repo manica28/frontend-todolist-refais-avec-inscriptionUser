@@ -1,0 +1,12 @@
+export const container = "min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-red-700 flex items-center justify-center p-4 relative overflow-hidden";
+export const backgroundBlobs = "absolute inset-0 relative"; // Les blobs restent en CSS inline
+export const card = "relative bg-white/10 backdrop-blur-xl rounded-3xl p-8 w-full max-w-md border border-white/20 shadow-2xl";
+export const header = "text-center mb-8";
+export const title = "text-3xl font-bold text-white mb-2";
+export const subtitle = "text-white/70 text-lg";
+export const formWrapper = "space-y-4";
+export const error = "flex items-center space-x-2 bg-red-500/20 border border-red-400/30 text-red-200 px-4 py-3 rounded-2xl text-sm";
+export const success = "flex items-center space-x-2 bg-green-500/20 border border-green-400/30 text-green-200 px-4 py-3 rounded-2xl text-sm";
+export const submitButton = "w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-4 px-6 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg hover:shadow-xl";
+export const loginText = "mt-8 text-center";
+export const loginLink = "text-red-300 hover:text-red-200 transition-colors underline font-bold";

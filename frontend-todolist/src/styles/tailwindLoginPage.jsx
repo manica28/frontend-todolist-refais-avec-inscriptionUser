@@ -1,0 +1,15 @@
+export const container = "min-h-screen flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 px-4";
+export const card = "bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md";
+export const title = "text-3xl font-bold text-center mb-6";
+export const form = "space-y-6";
+export const label = "block text-sm font-medium text-gray-700";
+export const input = "mt-1 w-full border px-3 py-2 rounded-lg shadow-sm outline-none";
+export const inputWrapper = "mt-1 flex items-center border rounded-lg px-3 py-2 shadow-sm";
+export const icon = "w-5 h-5 text-gray-400 mr-2";
+export const inputField = "flex-1 outline-none";
+export const error = "text-red-600 text-sm";
+export const submitButton = "w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition";
+export const registerText = "mt-6 text-center text-sm text-gray-600";
+export const registerLink = "text-blue-600 hover:underline";
+export const backText = "mt-2 text-center";
+export const backLink = "text-gray-500 hover:text-red-600 text-sm";
